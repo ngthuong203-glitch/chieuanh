@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ảnh trực tiếp — Gửi ảnh lên màn hình chiếu</title>
+<style>
+  * { box-sizing: border-box; }
+  :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --text:#f1f5f9; --dim:#cbd5e1; --accent:#f59e0b; --green:#22c55e; --red:#ef4444; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); }
+  a { color:#93c5fd; }
+  header { padding:14px 18px; border-bottom:1px solid var(--line); display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; }
+  header h1 { font-size:20px; margin:0; }
+  header nav a { margin-left:12px; text-decoration:none; }
+  main { max-width:860px; margin:0 auto; padding:18px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:16px; }
+  .card h2 { margin:0 0 10px; font-size:19px; }
+  .card h3 { margin:16px 0 8px; font-size:16px; }
+  p { line-height:1.6; }
+  .dim { color:var(--dim); }
+  label { display:block; margin:12px 0 4px; font-weight:600; }
+  input[type=text], input[type=password], textarea { width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--line); background:#0f172a; color:var(--text); font-size:16px; }
+  textarea { min-height:110px; font-family: ui-monospace, monospace; font-size:14px; }
+  .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  button, .btn { cursor:pointer; border:0; border-radius:999px; padding:12px 22px; font-size:16px; font-weight:700; background:var(--accent); color:#1e293b; }
+  button.secondary { background:#334155; color:var(--text); }
+  button.danger { background:var(--red); color:#fff; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .result { margin-top:12px; padding:12px 14px; border-radius:10px; background:#0f172a; border:1px solid var(--line); line-height:1.6; white-space:pre-wrap; }
+  .result.ok { border-color:var(--green); }
+  .result.err { border-color:var(--red); }
+  .bigcode { font-size:64px; font-weight:900; letter-spacing:10px; text-align:center; margin:8px 0; }
+  .linkbox { word-break:break-all; background:#0f172a; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:14px; }
+  .warn { border:1px solid var(--accent); border-radius:10px; padding:10px 12px; line-height:1.6; }
+  .chooser { display:grid; gap:14px; }
+  .chooser a.card { text-decoration:none; color:var(--text); display:block; }
+  .chooser a.card:hover { border-color:var(--accent); }
+  .thumb { width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:10px; display:block; }
+  .myphotos { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; }
+  /* ---- Live wall ---- */
+  #view-live { max-width:none; padding:0; }
+  .wall { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:10px; padding:14px; }
+  .wall figure { margin:0; position:relative; border-radius:12px; overflow:hidden; background:#1e293b; }
+  .wall img { width:100%; aspect-ratio:4/3; object-fit:cover; display:block; }
+  .wall figcaption { position:absolute; left:0; right:0; bottom:0; padding:8px 10px; background:rgba(0,0,0,.65); font-size:14px; }
+  .wall figure.enter { animation:pop .45s ease; }
+  @keyframes pop { from { opacity:0; transform:scale(.92); } to { opacity:1; transform:scale(1); } }
+  .corner { position:fixed; right:14px; bottom:14px; z-index:20; background:#fff; color:#0f172a; border-radius:14px; padding:12px 14px; text-align:center; box-shadow:0 8px 30px rgba(0,0,0,.5); max-width:220px; }
+  .corner .code { font-size:28px; font-weight:900; letter-spacing:4px; }
+  .corner p { margin:4px 0; color:#334155; font-size:14px; }
+  .corner svg { display:block; margin:6px auto 0; }
+  .badge { position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:30; background:var(--accent); color:#1e293b; font-weight:800; padding:10px 20px; border-radius:999px; font-size:18px; box-shadow:0 6px 24px rgba(0,0,0,.5); }
+  .ended { position:fixed; inset:0; z-index:40; background:#0f172a; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px; }
+  .ended h2 { font-size:42px; margin:0 0 10px; }
+  .emptywall { text-align:center; padding:60px 20px; }
+  .emptywall svg { display:block; margin:16px auto; }
+  [hidden] { display:none !important; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.43.4/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+<header>
+  <h1>📸 Ảnh trực tiếp</h1>
+  <nav>
+    <a href="?view=join">Người tham dự</a>
+    <a href="?view=live">Màn chiếu</a>
+    <a href="?view=control">Điều khiển</a>
+  </nav>
+</header>
+
+<div id="global-error" class="card" hidden style="border-color:var(--red);max-width:860px;margin:18px auto;">
+  Không tải được thư viện Supabase — cô kiểm tra mạng rồi tải lại trang này nhé.
+</div>
+
+<!-- ============ CHOOSER ============ -->
+<main id="view-chooser">
+  <div class="chooser">
+    <a class="card" href="?view=join">
+      <h2>🙋 Tôi là người tham dự</h2>
+      <p class="dim">Nhập mã phòng, chọn ảnh rồi gửi lên màn hình chiếu.</p>
+    </a>
+    <a class="card" href="?view=live">
+      <h2>🖥️ Tôi chiếu lên màn hình</h2>
+      <p class="dim">Mở trên máy chiếu. Ảnh mới gửi tới sẽ tự hiện lên, không cần bấm tải lại.</p>
+    </a>
+    <a class="card" href="?view=control">
+      <h2>🎛️ Tôi là cô giáo điều khiển</h2>
+      <p class="dim">Bắt đầu phiên, tạm dừng, xóa màn hình, kết thúc. Chỉ có vài nút.</p>
+    </a>
+  </div>
+  <p class="dim">Lưu ý: app này cần mạng để kết nối Supabase. Khi mở file trực tiếp trên máy, link chia sẻ chỉ chạy trên máy đó — muốn gửi link cho điện thoại thì cô đăng file lên một trang web miễn phí trước (xem hướng dẫn Word kèm theo).</p>
+</main>
+
+<!-- ============ CONTROL ============ -->
+<main id="view-control" hidden>
+  <div class="card">
+    <h2>1. Cấu hình Supabase (chỉ làm một lần)</h2>
+    <p class="dim">Dán địa chỉ Project URL và khóa anon lấy trong Supabase (Settings → API). Cấu hình chỉ lưu trong trình duyệt này, không nằm trong file.</p>
+    <label for="cfg-text">Dán cấu hình (dạng JSON, chấp nhận cả đoạn mẫu của Supabase)</label>
+    <textarea id="cfg-text" placeholder='Ví dụ: {"url": "https://xyzcompany.supabase.co", "key": "eyJ..."}'></textarea>
+    <p class="dim">Hoặc điền từng ô (nếu không dán được JSON):</p>
+    <label for="cfg-url">Project URL</label>
+    <input type="text" id="cfg-url" placeholder="https://xyzcompany.supabase.co" autocomplete="off">
+    <label for="cfg-key">Khóa anon (anon public)</label>
+    <input type="text" id="cfg-key" placeholder="eyJ..." autocomplete="off">
+    <div class="row" style="margin-top:14px;">
+      <button id="cfg-save" type="button">Lưu cấu hình</button>
+      <button id="cfg-clear" type="button" class="secondary">Xóa cấu hình đã lưu</button>
+    </div>
+    <div id="cfg-result" class="result" hidden></div>
+    <p id="cfg-status" class="dim"></p>
+  </div>
+
+  <div class="card" id="session-card" hidden>
+    <h2>2. Phiên chiếu</h2>
+    <div id="no-session">
+      <label for="host-code">Mã điều khiển (4 số, do cô tự đặt — dùng để mở khóa các nút bên dưới)</label>
+      <input type="text" id="host-code" inputmode="numeric" maxlength="4" placeholder="Ví dụ: 4821" autocomplete="off">
+      <div class="row" style="margin-top:14px;">
+        <button id="btn-start" type="button">▶ Bắt đầu</button>
+      </div>
+    </div>
+    <div id="has-session" hidden>
+      <p class="dim">Mã phòng — đọc to cho cả lớp nhập:</p>
+      <div class="bigcode" id="room-code-big">----</div>
+      <p>Trạng thái: <strong id="session-status">—</strong> · Số ảnh đang chiếu: <strong id="photo-count">0</strong>
+        <button id="btn-refresh-count" type="button" class="secondary" style="padding:6px 14px;font-size:14px;">Làm mới</button></p>
+      <div id="host-gate" hidden>
+        <label for="host-check">Nhập mã điều khiển (4 số) để mở khóa nút điều khiển:</label>
+        <div class="row">
+          <input type="text" id="host-check" inputmode="numeric" maxlength="4" placeholder="4 số" autocomplete="off" style="max-width:160px;">
+          <button id="btn-host-ok" type="button" class="secondary">Mở khóa</button>
+        </div>
+        <p id="host-check-msg" class="dim"></p>
+      </div>
+      <div class="row" style="margin-top:14px;">
+        <button id="btn-pause" type="button">⏸ Tạm dừng</button>
+        <button id="btn-clear" type="button" class="secondary">🧹 Xóa màn hình</button>
+        <button id="btn-end" type="button" class="danger">■ Kết thúc</button>
+      </div>
+      <div id="control-result" class="result" hidden></div>
+      <h3>Link chia sẻ</h3>
+      <p class="dim">Link cho người tham dự (mở trên điện thoại):</p>
+      <div class="linkbox" id="link-join">—</div>
+      <div class="row" style="margin-top:8px;"><button type="button" class="secondary" id="copy-join">Sao chép link tham dự</button></div>
+      <p class="dim" style="margin-top:14px;">Link cho máy chiếu:</p>
+      <div class="linkbox" id="link-live">—</div>
+      <div class="row" style="margin-top:8px;"><button type="button" class="secondary" id="copy-live">Sao chép link máy chiếu</button></div>
+      <p class="warn" style="margin-top:14px;">⚠️ Link trên có chứa khóa công khai (anon key) của project — chỉ gửi cho lớp học của mình, không đăng công khai.</p>
+    </div>
+  </div>
+</main>
+
+<!-- ============ JOIN ============ -->
+<main id="view-join" hidden>
+  <div id="join-noconfig" class="card" hidden>
+    <h2>Hãy mở bằng link của cô giáo</h2>
+    <p>Trang này cần link có sẵn cấu hình thì mới gửi ảnh được. Cô quét mã QR trên màn chiếu hoặc bấm link cô giáo gửi trong nhóm lớp nhé.</p>
+  </div>
+  <div id="join-main" hidden>
+    <div class="card">
+      <h2>Gửi ảnh lên màn hình chiếu</h2>
+      <label for="join-room">Mã phòng (4 số)</label>
+      <div class="row">
+        <input type="text" id="join-room" inputmode="numeric" maxlength="4" placeholder="Ví dụ: 4821" autocomplete="off" style="max-width:180px;">
+        <button id="btn-find-room" type="button" class="secondary">Tìm phiên</button>
+      </div>
+      <p id="join-session-msg" class="dim"></p>
+      <label for="join-name">Tên hiển thị (không bắt buộc)</label>
+      <input type="text" id="join-name" placeholder="Ví dụ: An" autocomplete="off">
+      <label>Ảnh của bạn</label>
+      <div class="row">
+        <label class="btn secondary" style="cursor:pointer;">🖼️ Chọn từ thư viện
+          <input type="file" id="file-gallery" accept="image/*" hidden>
+        </label>
+        <label class="btn secondary" style="cursor:pointer;">📷 Chụp ảnh mới
+          <input type="file" id="file-camera" accept="image/*" capture="environment" hidden>
+        </label>
+      </div>
+      <p id="file-name" class="dim"></p>
+      <img id="file-preview" class="thumb" hidden alt="Ảnh xem trước" style="margin-top:10px;">
+      <label for="join-caption">Chú thích (không bắt buộc)</label>
+      <input type="text" id="join-caption" placeholder="Ví dụ: Thí nghiệm đổi màu" autocomplete="off">
+      <div class="row" style="margin-top:14px;">
+        <button id="btn-upload" type="button">📤 Gửi ảnh</button>
+      </div>
+      <div id="upload-result" class="result" hidden></div>
+    </div>
+    <div class="card" id="my-photos-card" hidden>
+      <h2>Ảnh bạn đã gửi trong phiên này</h2>
+      <div class="myphotos" id="my-photos"></div>
+    </div>
+  </div>
+</main>
+
+<!-- ============ LIVE ============ -->
+<main id="view-live" hidden>
+  <div id="live-setup" class="card" style="max-width:560px;margin:18px auto;">
+    <h2>Màn chiếu</h2>
+    <p class="dim" id="live-setup-msg">Nhập mã phòng để mở màn chiếu, hoặc mở bằng link cô giáo gửi.</p>
+    <label for="live-room">Mã phòng (4 số)</label>
+    <div class="row">
+      <input type="text" id="live-room" inputmode="numeric" maxlength="4" placeholder="Ví dụ: 4821" autocomplete="off" style="max-width:180px;">
+      <button id="btn-live-open" type="button">Mở màn chiếu</button>
+    </div>
+  </div>
+  <div id="live-wall-wrap" hidden>
+    <div id="live-empty" class="emptywall" hidden>
+      <h2>Chưa có ảnh nào</h2>
+      <p class="dim">Quét mã QR góc phải bên dưới để gửi ảnh đầu tiên lên đây.</p>
+    </div>
+    <div class="wall" id="wall"></div>
+  </div>
+  <div id="live-paused" class="badge" hidden>⏸ Đã tạm dừng</div>
+  <div id="live-ended" class="ended" hidden>
+    <h2>Phiên đã kết thúc</h2>
+    <p class="dim">Cảm ơn cả lớp!</p>
+  </div>
+  <div id="live-corner" class="corner" hidden>
+    <div class="code" id="corner-code">----</div>
+    <p>Quét mã để gửi ảnh</p>
+    <div id="corner-qr"></div>
+    <p id="corner-link-note" class="dim" style="font-size:12px;"></p>
+  </div>
+</main>
+
+<script>
+var qrcode=(()=>{var or=(L,T)=>()=>(T||L((T={exports:{}}).exports,T),T.exports);var vr=or((W,V)=>{var $=(function(){var L=function(x,w){var g=236,l=17,n=x,s=O[w],t=null,r=0,h=null,i=[],v={},_=function(a,f){r=n*4+17,t=(function(e){for(var u=new Array(e),o=0;o<e;o+=1){u[o]=new Array(e);for(var d=0;d<e;d+=1)u[o][d]=null}return u})(r),B(0,0),B(r-7,0),B(0,r-7),E(),C(),m(a,f),n>=7&&N(a),h==null&&(h=ir(n,s,i)),U(h,f)},B=function(a,f){for(var e=-1;e<=7;e+=1)if(!(a+e<=-1||r<=a+e))for(var u=-1;u<=7;u+=1)f+u<=-1||r<=f+u||(0<=e&&e<=6&&(u==0||u==6)||0<=u&&u<=6&&(e==0||e==6)||2<=e&&e<=4&&2<=u&&u<=4?t[a+e][f+u]=!0:t[a+e][f+u]=!1)},y=function(){for(var a=0,f=0,e=0;e<8;e+=1){_(!0,e);var u=P.getLostPoint(v);(e==0||a>u)&&(a=u,f=e)}return f},C=function(){for(var a=8;a<r-8;a+=1)t[a][6]==null&&(t[a][6]=a%2==0);for(var f=8;f<r-8;f+=1)t[6][f]==null&&(t[6][f]=f%2==0)},E=function(){for(var a=P.getPatternPosition(n),f=0;f<a.length;f+=1)for(var e=0;e<a.length;e+=1){var u=a[f],o=a[e];if(t[u][o]==null)for(var d=-2;d<=2;d+=1)for(var c=-2;c<=2;c+=1)d==-2||d==2||c==-2||c==2||d==0&&c==0?t[u+d][o+c]=!0:t[u+d][o+c]=!1}},N=function(a){for(var f=P.getBCHTypeNumber(n),e=0;e<18;e+=1){var u=!a&&(f>>e&1)==1;t[Math.floor(e/3)][e%3+r-8-3]=u}for(var e=0;e<18;e+=1){var u=!a&&(f>>e&1)==1;t[e%3+r-8-3][Math.floor(e/3)]=u}},m=function(a,f){for(var e=s<<3|f,u=P.getBCHTypeInfo(e),o=0;o<15;o+=1){var d=!a&&(u>>o&1)==1;o<6?t[o][8]=d:o<8?t[o+1][8]=d:t[r-15+o][8]=d}for(var o=0;o<15;o+=1){var d=!a&&(u>>o&1)==1;o<8?t[8][r-o-1]=d:o<9?t[8][15-o-1+1]=d:t[8][15-o-1]=d}t[r-8][8]=!a},U=function(a,f){for(var e=-1,u=r-1,o=7,d=0,c=P.getMaskFunction(f),p=r-1;p>0;p-=2)for(p==6&&(p-=1);;){for(var b=0;b<2;b+=1)if(t[u][p-b]==null){var D=!1;d<a.length&&(D=(a[d]>>>o&1)==1);var A=c(u,p-b);A&&(D=!D),t[u][p-b]=D,o-=1,o==-1&&(d+=1,o=7)}if(u+=e,u<0||r<=u){u-=e,e=-e;break}}},H=function(a,f){for(var e=0,u=0,o=0,d=new Array(f.length),c=new Array(f.length),p=0;p<f.length;p+=1){var b=f[p].dataCount,D=f[p].totalCount-b;u=Math.max(u,b),o=Math.max(o,D),d[p]=new Array(b);for(var A=0;A<d[p].length;A+=1)d[p][A]=255&a.getBuffer()[A+e];e+=b;var R=P.getErrorCorrectPolynomial(D),I=K(d[p],R.getLength()-1),S=I.mod(R);c[p]=new Array(R.getLength()-1);for(var A=0;A<c[p].length;A+=1){var X=A+S.getLength()-c[p].length;c[p][A]=X>=0?S.getAt(X):0}}for(var Z=0,A=0;A<f.length;A+=1)Z+=f[A].totalCount;for(var J=new Array(Z),Q=0,A=0;A<u;A+=1)for(var p=0;p<f.length;p+=1)A<d[p].length&&(J[Q]=d[p][A],Q+=1);for(var A=0;A<o;A+=1)for(var p=0;p<f.length;p+=1)A<c[p].length&&(J[Q]=c[p][A],Q+=1);return J},ir=function(a,f,e){for(var u=Y.getRSBlocks(a,f),o=G(),d=0;d<e.length;d+=1){var c=e[d];o.put(c.getMode(),4),o.put(c.getLength(),P.getLengthInBits(c.getMode(),a)),c.write(o)}for(var p=0,d=0;d<u.length;d+=1)p+=u[d].dataCount;if(o.getLengthInBits()>p*8)throw"code length overflow. ("+o.getLengthInBits()+">"+p*8+")";for(o.getLengthInBits()+4<=p*8&&o.put(0,4);o.getLengthInBits()%8!=0;)o.putBit(!1);for(;!(o.getLengthInBits()>=p*8||(o.put(g,8),o.getLengthInBits()>=p*8));)o.put(l,8);return H(o,u)};v.addData=function(a,f){f=f||"Byte";var e=null;switch(f){case"Numeric":e=q(a);break;case"Alphanumeric":e=z(a);break;case"Byte":e=rr(a);break;case"Kanji":e=tr(a);break;default:throw"mode:"+f}i.push(e),h=null},v.isDark=function(a,f){if(a<0||r<=a||f<0||r<=f)throw a+","+f;return t[a][f]},v.getModuleCount=function(){return r},v.make=function(){if(n<1){for(var a=1;a<40;a++){for(var f=Y.getRSBlocks(a,s),e=G(),u=0;u<i.length;u++){var o=i[u];e.put(o.getMode(),4),e.put(o.getLength(),P.getLengthInBits(o.getMode(),a)),o.write(e)}for(var d=0,u=0;u<f.length;u++)d+=f[u].dataCount;if(e.getLengthInBits()<=d*8)break}n=a}_(!1,y())},v.createTableTag=function(a,f){a=a||2,f=typeof f>"u"?a*4:f;var e="";e+='<table style="',e+=" border-width: 0px; border-style: none;",e+=" border-collapse: collapse;",e+=" padding: 0px; margin: "+f+"px;",e+='">',e+="<tbody>";for(var u=0;u<v.getModuleCount();u+=1){e+="<tr>";for(var o=0;o<v.getModuleCount();o+=1)e+='<td style="',e+=" border-width: 0px; border-style: none;",e+=" border-collapse: collapse;",e+=" padding: 0px; margin: 0px;",e+=" width: "+a+"px;",e+=" height: "+a+"px;",e+=" background-color: ",e+=v.isDark(u,o)?"#000000":"#ffffff",e+=";",e+='"/>';e+="</tr>"}return e+="</tbody>",e+="</table>",e},v.createSvgTag=function(a,f,e,u){var o={};typeof arguments[0]=="object"&&(o=arguments[0],a=o.cellSize,f=o.margin,e=o.alt,u=o.title),a=a||2,f=typeof f>"u"?a*4:f,e=typeof e=="string"?{text:e}:e||{},e.text=e.text||null,e.id=e.text?e.id||"qrcode-description":null,u=typeof u=="string"?{text:u}:u||{},u.text=u.text||null,u.id=u.text?u.id||"qrcode-title":null;var d=v.getModuleCount()*a+f*2,c,p,b,D,A="",R;for(R="l"+a+",0 0,"+a+" -"+a+",0 0,-"+a+"z ",A+='<svg version="1.1" xmlns="http://www.w3.org/2000/svg"',A+=o.scalable?"":' width="'+d+'px" height="'+d+'px"',A+=' viewBox="0 0 '+d+" "+d+'" ',A+=' preserveAspectRatio="xMinYMin meet"',A+=u.text||e.text?' role="img" aria-labelledby="'+F([u.id,e.id].join(" ").trim())+'"':"",A+=">",A+=u.text?'<title id="'+F(u.id)+'">'+F(u.text)+"</title>":"",A+=e.text?'<description id="'+F(e.id)+'">'+F(e.text)+"</description>":"",A+='<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>',A+='<path d="',b=0;b<v.getModuleCount();b+=1)for(D=b*a+f,c=0;c<v.getModuleCount();c+=1)v.isDark(b,c)&&(p=c*a+f,A+="M"+p+","+D+R);return A+='" stroke="transparent" fill="black"/>',A+="</svg>",A},v.createDataURL=function(a,f){a=a||2,f=typeof f>"u"?a*4:f;var e=v.getModuleCount()*a+f*2,u=f,o=e-f;return fr(e,e,function(d,c){if(u<=d&&d<o&&u<=c&&c<o){var p=Math.floor((d-u)/a),b=Math.floor((c-u)/a);return v.isDark(b,p)?0:1}else return 1})},v.createImgTag=function(a,f,e){a=a||2,f=typeof f>"u"?a*4:f;var u=v.getModuleCount()*a+f*2,o="";return o+="<img",o+=' src="',o+=v.createDataURL(a,f),o+='"',o+=' width="',o+=u,o+='"',o+=' height="',o+=u,o+='"',e&&(o+=' alt="',o+=F(e),o+='"'),o+="/>",o};var F=function(a){for(var f="",e=0;e<a.length;e+=1){var u=a.charAt(e);switch(u){case"<":f+="&lt;";break;case">":f+="&gt;";break;case"&":f+="&amp;";break;case'"':f+="&quot;";break;default:f+=u;break}}return f},ur=function(a){var f=1;a=typeof a>"u"?f*2:a;var e=v.getModuleCount()*f+a*2,u=a,o=e-a,d,c,p,b,D,A={"\u2588\u2588":"\u2588","\u2588 ":"\u2580"," \u2588":"\u2584","  ":" "},R={"\u2588\u2588":"\u2580","\u2588 ":"\u2580"," \u2588":" ","  ":" "},I="";for(d=0;d<e;d+=2){for(p=Math.floor((d-u)/f),b=Math.floor((d+1-u)/f),c=0;c<e;c+=1)D="\u2588",u<=c&&c<o&&u<=d&&d<o&&v.isDark(p,Math.floor((c-u)/f))&&(D=" "),u<=c&&c<o&&u<=d+1&&d+1<o&&v.isDark(b,Math.floor((c-u)/f))?D+=" ":D+="\u2588",I+=a<1&&d+1>=o?R[D]:A[D];I+=`
+`}return e%2&&a>0?I.substring(0,I.length-e-1)+Array(e+1).join("\u2580"):I.substring(0,I.length-1)};return v.createASCII=function(a,f){if(a=a||1,a<2)return ur(f);a-=1,f=typeof f>"u"?a*2:f;var e=v.getModuleCount()*a+f*2,u=f,o=e-f,d,c,p,b,D=Array(a+1).join("\u2588\u2588"),A=Array(a+1).join("  "),R="",I="";for(d=0;d<e;d+=1){for(p=Math.floor((d-u)/a),I="",c=0;c<e;c+=1)b=1,u<=c&&c<o&&u<=d&&d<o&&v.isDark(p,Math.floor((c-u)/a))&&(b=0),I+=b?D:A;for(p=0;p<a;p+=1)R+=I+`
+`}return R.substring(0,R.length-1)},v.renderTo2dContext=function(a,f){f=f||2;for(var e=v.getModuleCount(),u=0;u<e;u++)for(var o=0;o<e;o++)a.fillStyle=v.isDark(u,o)?"black":"white",a.fillRect(u*f,o*f,f,f)},v};L.stringToBytesFuncs={default:function(x){for(var w=[],g=0;g<x.length;g+=1){var l=x.charCodeAt(g);w.push(l&255)}return w}},L.stringToBytes=L.stringToBytesFuncs.default,L.createStringToBytes=function(x,w){var g=(function(){for(var n=nr(x),s=function(){var C=n.read();if(C==-1)throw"eof";return C},t=0,r={};;){var h=n.read();if(h==-1)break;var i=s(),v=s(),_=s(),B=String.fromCharCode(h<<8|i),y=v<<8|_;r[B]=y,t+=1}if(t!=w)throw t+" != "+w;return r})(),l=63;return function(n){for(var s=[],t=0;t<n.length;t+=1){var r=n.charCodeAt(t);if(r<128)s.push(r);else{var h=g[n.charAt(t)];typeof h=="number"?(h&255)==h?s.push(h):(s.push(h>>>8),s.push(h&255)):s.push(l)}}return s}};var T={MODE_NUMBER:1,MODE_ALPHA_NUM:2,MODE_8BIT_BYTE:4,MODE_KANJI:8},O={L:1,M:0,Q:3,H:2},k={PATTERN000:0,PATTERN001:1,PATTERN010:2,PATTERN011:3,PATTERN100:4,PATTERN101:5,PATTERN110:6,PATTERN111:7},P=(function(){var x=[[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50],[6,30,54],[6,32,58],[6,34,62],[6,26,46,66],[6,26,48,70],[6,26,50,74],[6,30,54,78],[6,30,56,82],[6,30,58,86],[6,34,62,90],[6,28,50,72,94],[6,26,50,74,98],[6,30,54,78,102],[6,28,54,80,106],[6,32,58,84,110],[6,30,58,86,114],[6,34,62,90,118],[6,26,50,74,98,122],[6,30,54,78,102,126],[6,26,52,78,104,130],[6,30,56,82,108,134],[6,34,60,86,112,138],[6,30,58,86,114,142],[6,34,62,90,118,146],[6,30,54,78,102,126,150],[6,24,50,76,102,128,154],[6,28,54,80,106,132,158],[6,32,58,84,110,136,162],[6,26,54,82,110,138,166],[6,30,58,86,114,142,170]],w=1335,g=7973,l=21522,n={},s=function(t){for(var r=0;t!=0;)r+=1,t>>>=1;return r};return n.getBCHTypeInfo=function(t){for(var r=t<<10;s(r)-s(w)>=0;)r^=w<<s(r)-s(w);return(t<<10|r)^l},n.getBCHTypeNumber=function(t){for(var r=t<<12;s(r)-s(g)>=0;)r^=g<<s(r)-s(g);return t<<12|r},n.getPatternPosition=function(t){return x[t-1]},n.getMaskFunction=function(t){switch(t){case k.PATTERN000:return function(r,h){return(r+h)%2==0};case k.PATTERN001:return function(r,h){return r%2==0};case k.PATTERN010:return function(r,h){return h%3==0};case k.PATTERN011:return function(r,h){return(r+h)%3==0};case k.PATTERN100:return function(r,h){return(Math.floor(r/2)+Math.floor(h/3))%2==0};case k.PATTERN101:return function(r,h){return r*h%2+r*h%3==0};case k.PATTERN110:return function(r,h){return(r*h%2+r*h%3)%2==0};case k.PATTERN111:return function(r,h){return(r*h%3+(r+h)%2)%2==0};default:throw"bad maskPattern:"+t}},n.getErrorCorrectPolynomial=function(t){for(var r=K([1],0),h=0;h<t;h+=1)r=r.multiply(K([1,M.gexp(h)],0));return r},n.getLengthInBits=function(t,r){if(1<=r&&r<10)switch(t){case T.MODE_NUMBER:return 10;case T.MODE_ALPHA_NUM:return 9;case T.MODE_8BIT_BYTE:return 8;case T.MODE_KANJI:return 8;default:throw"mode:"+t}else if(r<27)switch(t){case T.MODE_NUMBER:return 12;case T.MODE_ALPHA_NUM:return 11;case T.MODE_8BIT_BYTE:return 16;case T.MODE_KANJI:return 10;default:throw"mode:"+t}else if(r<41)switch(t){case T.MODE_NUMBER:return 14;case T.MODE_ALPHA_NUM:return 13;case T.MODE_8BIT_BYTE:return 16;case T.MODE_KANJI:return 12;default:throw"mode:"+t}else throw"type:"+r},n.getLostPoint=function(t){for(var r=t.getModuleCount(),h=0,i=0;i<r;i+=1)for(var v=0;v<r;v+=1){for(var _=0,B=t.isDark(i,v),y=-1;y<=1;y+=1)if(!(i+y<0||r<=i+y))for(var C=-1;C<=1;C+=1)v+C<0||r<=v+C||y==0&&C==0||B==t.isDark(i+y,v+C)&&(_+=1);_>5&&(h+=3+_-5)}for(var i=0;i<r-1;i+=1)for(var v=0;v<r-1;v+=1){var E=0;t.isDark(i,v)&&(E+=1),t.isDark(i+1,v)&&(E+=1),t.isDark(i,v+1)&&(E+=1),t.isDark(i+1,v+1)&&(E+=1),(E==0||E==4)&&(h+=3)}for(var i=0;i<r;i+=1)for(var v=0;v<r-6;v+=1)t.isDark(i,v)&&!t.isDark(i,v+1)&&t.isDark(i,v+2)&&t.isDark(i,v+3)&&t.isDark(i,v+4)&&!t.isDark(i,v+5)&&t.isDark(i,v+6)&&(h+=40);for(var v=0;v<r;v+=1)for(var i=0;i<r-6;i+=1)t.isDark(i,v)&&!t.isDark(i+1,v)&&t.isDark(i+2,v)&&t.isDark(i+3,v)&&t.isDark(i+4,v)&&!t.isDark(i+5,v)&&t.isDark(i+6,v)&&(h+=40);for(var N=0,v=0;v<r;v+=1)for(var i=0;i<r;i+=1)t.isDark(i,v)&&(N+=1);var m=Math.abs(100*N/r/r-50)/5;return h+=m*10,h},n})(),M=(function(){for(var x=new Array(256),w=new Array(256),g=0;g<8;g+=1)x[g]=1<<g;for(var g=8;g<256;g+=1)x[g]=x[g-4]^x[g-5]^x[g-6]^x[g-8];for(var g=0;g<255;g+=1)w[x[g]]=g;var l={};return l.glog=function(n){if(n<1)throw"glog("+n+")";return w[n]},l.gexp=function(n){for(;n<0;)n+=255;for(;n>=256;)n-=255;return x[n]},l})();function K(x,w){if(typeof x.length>"u")throw x.length+"/"+w;var g=(function(){for(var n=0;n<x.length&&x[n]==0;)n+=1;for(var s=new Array(x.length-n+w),t=0;t<x.length-n;t+=1)s[t]=x[t+n];return s})(),l={};return l.getAt=function(n){return g[n]},l.getLength=function(){return g.length},l.multiply=function(n){for(var s=new Array(l.getLength()+n.getLength()-1),t=0;t<l.getLength();t+=1)for(var r=0;r<n.getLength();r+=1)s[t+r]^=M.gexp(M.glog(l.getAt(t))+M.glog(n.getAt(r)));return K(s,0)},l.mod=function(n){if(l.getLength()-n.getLength()<0)return l;for(var s=M.glog(l.getAt(0))-M.glog(n.getAt(0)),t=new Array(l.getLength()),r=0;r<l.getLength();r+=1)t[r]=l.getAt(r);for(var r=0;r<n.getLength();r+=1)t[r]^=M.gexp(M.glog(n.getAt(r))+s);return K(t,0).mod(n)},l}var Y=(function(){var x=[[1,26,19],[1,26,16],[1,26,13],[1,26,9],[1,44,34],[1,44,28],[1,44,22],[1,44,16],[1,70,55],[1,70,44],[2,35,17],[2,35,13],[1,100,80],[2,50,32],[2,50,24],[4,25,9],[1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12],[2,86,68],[4,43,27],[4,43,19],[4,43,15],[2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14],[2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15],[2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13],[2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16],[4,101,81],[1,80,50,4,81,51],[4,50,22,4,51,23],[3,36,12,8,37,13],[2,116,92,2,117,93],[6,58,36,2,59,37],[4,46,20,6,47,21],[7,42,14,4,43,15],[4,133,107],[8,59,37,1,60,38],[8,44,20,4,45,21],[12,33,11,4,34,12],[3,145,115,1,146,116],[4,64,40,5,65,41],[11,36,16,5,37,17],[11,36,12,5,37,13],[5,109,87,1,110,88],[5,65,41,5,66,42],[5,54,24,7,55,25],[11,36,12,7,37,13],[5,122,98,1,123,99],[7,73,45,3,74,46],[15,43,19,2,44,20],[3,45,15,13,46,16],[1,135,107,5,136,108],[10,74,46,1,75,47],[1,50,22,15,51,23],[2,42,14,17,43,15],[5,150,120,1,151,121],[9,69,43,4,70,44],[17,50,22,1,51,23],[2,42,14,19,43,15],[3,141,113,4,142,114],[3,70,44,11,71,45],[17,47,21,4,48,22],[9,39,13,16,40,14],[3,135,107,5,136,108],[3,67,41,13,68,42],[15,54,24,5,55,25],[15,43,15,10,44,16],[4,144,116,4,145,117],[17,68,42],[17,50,22,6,51,23],[19,46,16,6,47,17],[2,139,111,7,140,112],[17,74,46],[7,54,24,16,55,25],[34,37,13],[4,151,121,5,152,122],[4,75,47,14,76,48],[11,54,24,14,55,25],[16,45,15,14,46,16],[6,147,117,4,148,118],[6,73,45,14,74,46],[11,54,24,16,55,25],[30,46,16,2,47,17],[8,132,106,4,133,107],[8,75,47,13,76,48],[7,54,24,22,55,25],[22,45,15,13,46,16],[10,142,114,2,143,115],[19,74,46,4,75,47],[28,50,22,6,51,23],[33,46,16,4,47,17],[8,152,122,4,153,123],[22,73,45,3,74,46],[8,53,23,26,54,24],[12,45,15,28,46,16],[3,147,117,10,148,118],[3,73,45,23,74,46],[4,54,24,31,55,25],[11,45,15,31,46,16],[7,146,116,7,147,117],[21,73,45,7,74,46],[1,53,23,37,54,24],[19,45,15,26,46,16],[5,145,115,10,146,116],[19,75,47,10,76,48],[15,54,24,25,55,25],[23,45,15,25,46,16],[13,145,115,3,146,116],[2,74,46,29,75,47],[42,54,24,1,55,25],[23,45,15,28,46,16],[17,145,115],[10,74,46,23,75,47],[10,54,24,35,55,25],[19,45,15,35,46,16],[17,145,115,1,146,116],[14,74,46,21,75,47],[29,54,24,19,55,25],[11,45,15,46,46,16],[13,145,115,6,146,116],[14,74,46,23,75,47],[44,54,24,7,55,25],[59,46,16,1,47,17],[12,151,121,7,152,122],[12,75,47,26,76,48],[39,54,24,14,55,25],[22,45,15,41,46,16],[6,151,121,14,152,122],[6,75,47,34,76,48],[46,54,24,10,55,25],[2,45,15,64,46,16],[17,152,122,4,153,123],[29,74,46,14,75,47],[49,54,24,10,55,25],[24,45,15,46,46,16],[4,152,122,18,153,123],[13,74,46,32,75,47],[48,54,24,14,55,25],[42,45,15,32,46,16],[20,147,117,4,148,118],[40,75,47,7,76,48],[43,54,24,22,55,25],[10,45,15,67,46,16],[19,148,118,6,149,119],[18,75,47,31,76,48],[34,54,24,34,55,25],[20,45,15,61,46,16]],w=function(n,s){var t={};return t.totalCount=n,t.dataCount=s,t},g={},l=function(n,s){switch(s){case O.L:return x[(n-1)*4+0];case O.M:return x[(n-1)*4+1];case O.Q:return x[(n-1)*4+2];case O.H:return x[(n-1)*4+3];default:return}};return g.getRSBlocks=function(n,s){var t=l(n,s);if(typeof t>"u")throw"bad rs block @ typeNumber:"+n+"/errorCorrectionLevel:"+s;for(var r=t.length/3,h=[],i=0;i<r;i+=1)for(var v=t[i*3+0],_=t[i*3+1],B=t[i*3+2],y=0;y<v;y+=1)h.push(w(_,B));return h},g})(),G=function(){var x=[],w=0,g={};return g.getBuffer=function(){return x},g.getAt=function(l){var n=Math.floor(l/8);return(x[n]>>>7-l%8&1)==1},g.put=function(l,n){for(var s=0;s<n;s+=1)g.putBit((l>>>n-s-1&1)==1)},g.getLengthInBits=function(){return w},g.putBit=function(l){var n=Math.floor(w/8);x.length<=n&&x.push(0),l&&(x[n]|=128>>>w%8),w+=1},g},q=function(x){var w=T.MODE_NUMBER,g=x,l={};l.getMode=function(){return w},l.getLength=function(t){return g.length},l.write=function(t){for(var r=g,h=0;h+2<r.length;)t.put(n(r.substring(h,h+3)),10),h+=3;h<r.length&&(r.length-h==1?t.put(n(r.substring(h,h+1)),4):r.length-h==2&&t.put(n(r.substring(h,h+2)),7))};var n=function(t){for(var r=0,h=0;h<t.length;h+=1)r=r*10+s(t.charAt(h));return r},s=function(t){if("0"<=t&&t<="9")return t.charCodeAt(0)-48;throw"illegal char :"+t};return l},z=function(x){var w=T.MODE_ALPHA_NUM,g=x,l={};l.getMode=function(){return w},l.getLength=function(s){return g.length},l.write=function(s){for(var t=g,r=0;r+1<t.length;)s.put(n(t.charAt(r))*45+n(t.charAt(r+1)),11),r+=2;r<t.length&&s.put(n(t.charAt(r)),6)};var n=function(s){if("0"<=s&&s<="9")return s.charCodeAt(0)-48;if("A"<=s&&s<="Z")return s.charCodeAt(0)-65+10;switch(s){case" ":return 36;case"$":return 37;case"%":return 38;case"*":return 39;case"+":return 40;case"-":return 41;case".":return 42;case"/":return 43;case":":return 44;default:throw"illegal char :"+s}};return l},rr=function(x){var w=T.MODE_8BIT_BYTE,g=x,l=L.stringToBytes(x),n={};return n.getMode=function(){return w},n.getLength=function(s){return l.length},n.write=function(s){for(var t=0;t<l.length;t+=1)s.put(l[t],8)},n},tr=function(x){var w=T.MODE_KANJI,g=x,l=L.stringToBytesFuncs.SJIS;if(!l)throw"sjis not supported.";(function(t,r){var h=l(t);if(h.length!=2||(h[0]<<8|h[1])!=r)throw"sjis not supported."})("\u53CB",38726);var n=l(x),s={};return s.getMode=function(){return w},s.getLength=function(t){return~~(n.length/2)},s.write=function(t){for(var r=n,h=0;h+1<r.length;){var i=(255&r[h])<<8|255&r[h+1];if(33088<=i&&i<=40956)i-=33088;else if(57408<=i&&i<=60351)i-=49472;else throw"illegal char at "+(h+1)+"/"+i;i=(i>>>8&255)*192+(i&255),t.put(i,13),h+=2}if(h<r.length)throw"illegal char at "+(h+1)},s},j=function(){var x=[],w={};return w.writeByte=function(g){x.push(g&255)},w.writeShort=function(g){w.writeByte(g),w.writeByte(g>>>8)},w.writeBytes=function(g,l,n){l=l||0,n=n||g.length;for(var s=0;s<n;s+=1)w.writeByte(g[s+l])},w.writeString=function(g){for(var l=0;l<g.length;l+=1)w.writeByte(g.charCodeAt(l))},w.toByteArray=function(){return x},w.toString=function(){var g="";g+="[";for(var l=0;l<x.length;l+=1)l>0&&(g+=","),g+=x[l];return g+="]",g},w},er=function(){var x=0,w=0,g=0,l="",n={},s=function(r){l+=String.fromCharCode(t(r&63))},t=function(r){if(!(r<0)){if(r<26)return 65+r;if(r<52)return 97+(r-26);if(r<62)return 48+(r-52);if(r==62)return 43;if(r==63)return 47}throw"n:"+r};return n.writeByte=function(r){for(x=x<<8|r&255,w+=8,g+=1;w>=6;)s(x>>>w-6),w-=6},n.flush=function(){if(w>0&&(s(x<<6-w),x=0,w=0),g%3!=0)for(var r=3-g%3,h=0;h<r;h+=1)l+="="},n.toString=function(){return l},n},nr=function(x){var w=x,g=0,l=0,n=0,s={};s.read=function(){for(;n<8;){if(g>=w.length){if(n==0)return-1;throw"unexpected end of file./"+n}var r=w.charAt(g);if(g+=1,r=="=")return n=0,-1;if(r.match(/^\s$/))continue;l=l<<6|t(r.charCodeAt(0)),n+=6}var h=l>>>n-8&255;return n-=8,h};var t=function(r){if(65<=r&&r<=90)return r-65;if(97<=r&&r<=122)return r-97+26;if(48<=r&&r<=57)return r-48+52;if(r==43)return 62;if(r==47)return 63;throw"c:"+r};return s},ar=function(x,w){var g=x,l=w,n=new Array(x*w),s={};s.setPixel=function(i,v,_){n[v*g+i]=_},s.write=function(i){i.writeString("GIF87a"),i.writeShort(g),i.writeShort(l),i.writeByte(128),i.writeByte(0),i.writeByte(0),i.writeByte(0),i.writeByte(0),i.writeByte(0),i.writeByte(255),i.writeByte(255),i.writeByte(255),i.writeString(","),i.writeShort(0),i.writeShort(0),i.writeShort(g),i.writeShort(l),i.writeByte(0);var v=2,_=r(v);i.writeByte(v);for(var B=0;_.length-B>255;)i.writeByte(255),i.writeBytes(_,B,255),B+=255;i.writeByte(_.length-B),i.writeBytes(_,B,_.length-B),i.writeByte(0),i.writeString(";")};var t=function(i){var v=i,_=0,B=0,y={};return y.write=function(C,E){if(C>>>E)throw"length over";for(;_+E>=8;)v.writeByte(255&(C<<_|B)),E-=8-_,C>>>=8-_,B=0,_=0;B=C<<_|B,_=_+E},y.flush=function(){_>0&&v.writeByte(B)},y},r=function(i){for(var v=1<<i,_=(1<<i)+1,B=i+1,y=h(),C=0;C<v;C+=1)y.add(String.fromCharCode(C));y.add(String.fromCharCode(v)),y.add(String.fromCharCode(_));var E=j(),N=t(E);N.write(v,B);var m=0,U=String.fromCharCode(n[m]);for(m+=1;m<n.length;){var H=String.fromCharCode(n[m]);m+=1,y.contains(U+H)?U=U+H:(N.write(y.indexOf(U),B),y.size()<4095&&(y.size()==1<<B&&(B+=1),y.add(U+H)),U=H)}return N.write(y.indexOf(U),B),N.write(_,B),N.flush(),E.toByteArray()},h=function(){var i={},v=0,_={};return _.add=function(B){if(_.contains(B))throw"dup key:"+B;i[B]=v,v+=1},_.size=function(){return v},_.indexOf=function(B){return i[B]},_.contains=function(B){return typeof i[B]<"u"},_};return s},fr=function(x,w,g){for(var l=ar(x,w),n=0;n<w;n+=1)for(var s=0;s<x;s+=1)l.setPixel(s,n,g(s,n));var t=j();l.write(t);for(var r=er(),h=t.toByteArray(),i=0;i<h.length;i+=1)r.writeByte(h[i]);return r.flush(),"data:image/gif;base64,"+r};return L})();(function(){$.stringToBytesFuncs["UTF-8"]=function(L){function T(O){for(var k=[],P=0;P<O.length;P++){var M=O.charCodeAt(P);M<128?k.push(M):M<2048?k.push(192|M>>6,128|M&63):M<55296||M>=57344?k.push(224|M>>12,128|M>>6&63,128|M&63):(P++,M=65536+((M&1023)<<10|O.charCodeAt(P)&1023),k.push(240|M>>18,128|M>>12&63,128|M>>6&63,128|M&63))}return k}return T(L)}})();(function(L){typeof define=="function"&&define.amd?define([],L):typeof W=="object"&&(V.exports=L())})(function(){return $})});return vr();})();
+
+</script>
+<script id="pure-logic">
+/* PURE LOGIC — no DOM, no network. The Node test file extracts this exact
+   block from Anh_truc_tiep.html and runs assertions against it. */
+
+function stripOneQuotePair(v) {
+  var s = String(v == null ? '' : v).trim();
+  if (s.length >= 2 && s.charAt(0) === '"' && s.charAt(s.length - 1) === '"') {
+    s = s.slice(1, -1).trim();
+  }
+  return s;
+}
+
+function quoteUnquotedKeys(text) {
+  var out = '', i = 0, n = text.length, expectKey = false;
+  function isIdStart(c) { return /[A-Za-z_$]/.test(c); }
+  function isId(c) { return /[A-Za-z0-9_$]/.test(c); }
+  while (i < n) {
+    var c = text[i];
+    if (c === '"' || c === "'") {
+      var q = c, j = i + 1, inner = '';
+      while (j < n) {
+        if (text[j] === '\\' && j + 1 < n) { inner += text[j] + text[j + 1]; j += 2; continue; }
+        if (text[j] === q) { j++; break; }
+        inner += text[j]; j++;
+      }
+      if (q === "'") {
+        var fixed = inner.replace(/\\'/g, "'").replace(/"/g, '\\"');
+        out += '"' + fixed + '"';
+      } else {
+        out += text.slice(i, j);
+      }
+      i = j; expectKey = false; continue;
+    }
+    if (c === '{' || c === ',') { out += c; i++; expectKey = true; continue; }
+    if (c === '}' || c === ':') { out += c; i++; expectKey = false; continue; }
+    if (/\s/.test(c)) { out += c; i++; continue; }
+    if (expectKey && isIdStart(c)) {
+      var k = i;
+      while (k < n && isId(text[k])) k++;
+      var m = k;
+      while (m < n && /\s/.test(text[m])) m++;
+      if (text[m] === ':') { out += '"' + text.slice(i, k) + '"'; i = k; expectKey = false; continue; }
+      out += text.slice(i, k); i = k; expectKey = false; continue;
+    }
+    out += c; i++; expectKey = false;
+  }
+  return out;
+}
+
+function extractObjectCandidates(text) {
+  var candidates = [];
+  for (var i = 0; i < text.length; i++) {
+    if (text[i] !== '{') continue;
+    var depth = 0, inStr = null, j = i;
+    while (j < text.length) {
+      var c = text[j];
+      if (inStr) {
+        if (c === '\\') { j += 2; continue; }
+        if (c === inStr) inStr = null;
+        j++; continue;
+      }
+      if (c === '"' || c === "'") { inStr = c; j++; continue; }
+      if (c === '{') depth++;
+      else if (c === '}') { depth--; if (depth === 0) { candidates.push(text.slice(i, j + 1)); break; } }
+      j++;
+    }
+  }
+  return candidates;
+}
+
+function tryParseObject(candidate) {
+  try {
+    var o = JSON.parse(candidate);
+    if (o && typeof o === 'object' && !Array.isArray(o)) return o;
+  } catch (e) {}
+  try {
+    var o2 = JSON.parse(quoteUnquotedKeys(candidate));
+    if (o2 && typeof o2 === 'object' && !Array.isArray(o2)) return o2;
+  } catch (e) {}
+  return null;
+}
+
+var URL_KEYS = ['url', 'supabaseUrl', 'projectUrl', 'project_url', 'SUPABASE_URL'];
+var KEY_KEYS = ['key', 'anonKey', 'supabaseKey', 'anon_key', 'anonkey', 'apiKey', 'ANON_KEY'];
+
+function pickValue(obj, keys) {
+  for (var i = 0; i < keys.length; i++) {
+    if (Object.prototype.hasOwnProperty.call(obj, keys[i])) {
+      var v = stripOneQuotePair(obj[keys[i]]);
+      if (v) return v;
+    }
+  }
+  return '';
+}
+
+function validateConfig(url, key) {
+  var missing = [], invalid = [];
+  if (!url) {
+    missing.push('url');
+  } else {
+    try {
+      var u = new URL(url);
+      if (u.protocol !== 'https:' || !u.hostname) invalid.push('url');
+    } catch (e) { invalid.push('url'); }
+  }
+  if (!key) {
+    missing.push('key');
+  } else if (key.length < 20) {
+    invalid.push('key');
+  }
+  return { missing: missing, invalid: invalid };
+}
+
+function parseSupabaseConfig(text) {
+  var trimmed = String(text == null ? '' : text).trim();
+  if (!trimmed) return { config: null, missing: ['url', 'key'], invalid: [] };
+  var obj = null, candidates = extractObjectCandidates(trimmed);
+  for (var i = 0; i < candidates.length; i++) {
+    obj = tryParseObject(candidates[i]);
+    if (obj) break;
+  }
+  if (!obj) {
+    var m = trimmed.match(/createClient\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\)/);
+    if (m) obj = { url: m[1], key: m[2] };
+  }
+  if (!obj) return { config: null, missing: ['url', 'key'], invalid: [] };
+  var url = pickValue(obj, URL_KEYS);
+  var key = pickValue(obj, KEY_KEYS);
+  var v = validateConfig(url, key);
+  if (v.missing.length || v.invalid.length) return { config: null, missing: v.missing, invalid: v.invalid };
+  return { config: { url: url, key: key }, missing: [], invalid: [] };
+}
+
+function getViewFromSearch(search) {
+  try {
+    var v = new URLSearchParams(search).get('view');
+    if (v === 'join' || v === 'live' || v === 'control') return v;
+  } catch (e) {}
+  return 'chooser';
+}
+
+function getQueryParam(search, name) {
+  try { return new URLSearchParams(search).get(name) || ''; } catch (e) { return ''; }
+}
+
+function b64urlEncode(str) {
+  var bytes = new TextEncoder().encode(str), bin = '';
+  for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function b64urlDecode(s) {
+  var b64 = String(s).replace(/-/g, '+').replace(/_/g, '/');
+  b64 += '='.repeat((4 - (b64.length % 4)) % 4);
+  var bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+function encodeCfg(cfg) {
+  return b64urlEncode(JSON.stringify({ u: cfg.url, k: cfg.key }));
+}
+
+function decodeCfg(s) {
+  try {
+    var o = JSON.parse(b64urlDecode(s));
+    if (o && typeof o.u === 'string' && typeof o.k === 'string') {
+      var url = stripOneQuotePair(o.u), key = stripOneQuotePair(o.k);
+      var v = validateConfig(url, key);
+      if (!v.missing.length && !v.invalid.length) return { url: url, key: key };
+    }
+  } catch (e) {}
+  return null;
+}
+
+function nextStatusAfter(current, action) {
+  if (action === 'pause' && current === 'live') return 'paused';
+  if (action === 'resume' && current === 'paused') return 'live';
+  if (action === 'end' && (current === 'live' || current === 'paused')) return 'ended';
+  return null;
+}
+
+function uploadState(status) {
+  if (status === 'live') return 'ok';
+  if (status === 'paused') return 'held';
+  if (status === 'ended') return 'blocked';
+  return 'not-started';
+}
+
+function shouldHoldInsert(status) {
+  return status === 'paused' || status === 'ended';
+}
+
+function filterWallPhotos(photos, session) {
+  if (!session || session.status === 'ended') return [];
+  var cleared = session.cleared_at ? new Date(session.cleared_at).getTime() : 0;
+  return photos
+    .filter(function (p) { return new Date(p.created_at).getTime() > cleared; })
+    .sort(function (a, b) { return new Date(b.created_at) - new Date(a.created_at); });
+}
+
+function makeRoomCode() {
+  return String(1000 + Math.floor(Math.random() * 9000));
+}
+
+function sanitizeFileName(name) {
+  return String(name || 'anh').replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 80) || 'anh';
+}
+</script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var LS_CONFIG = 'anh_truc_tiep_config';
+  var LS_LAST_SESSION = 'anh_truc_tiep_last_session';
+  var SS_HOST = 'anh_truc_tiep_host_ok';
+  var SS_MINE = 'anh_truc_tiep_my_photos';
+
+  var client = null, cfg = null, session = null, channel = null;
+  var wallPhotos = [], myPhotos = [], pendingAction = null;
+  var joinSession = null, joinFile = null;
+
+  function showResult(el, ok, text) {
+    el.hidden = false;
+    el.className = 'result ' + (ok ? 'ok' : 'err');
+    el.textContent = text;
+  }
+
+  function statusText(s) {
+    return s === 'live' ? 'Đang mở' : s === 'paused' ? 'Đang tạm dừng' : s === 'ended' ? 'Đã kết thúc' : '—';
+  }
+
+  function createClient() {
+    if (!cfg) return null;
+    if (typeof window.supabase === 'undefined') return null;
+    client = window.supabase.createClient(cfg.url, cfg.key);
+    return client;
+  }
+
+  function resolveConfig() {
+    var fromLink = decodeCfg(getQueryParam(location.search, 'cfg'));
+    if (fromLink) {
+      cfg = fromLink;
+      try { localStorage.setItem(LS_CONFIG, JSON.stringify(cfg)); } catch (e) { /* optional mirror; never blocks */ }
+      return cfg;
+    }
+    try {
+      var raw = localStorage.getItem(LS_CONFIG);
+      if (raw) {
+        var o = JSON.parse(raw);
+        if (o && o.url && o.key) { cfg = { url: o.url, key: o.key }; return cfg; }
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function baseUrl() {
+    return location.href.split('?')[0].split('#')[0];
+  }
+
+  function shareLinks() {
+    if (!session || !cfg) return { join: '', live: '' };
+    var c = encodeCfg(cfg);
+    return {
+      join: baseUrl() + '?view=join&cfg=' + c + '&room=' + encodeURIComponent(session.code),
+      live: baseUrl() + '?view=live&cfg=' + c + '&room=' + encodeURIComponent(session.code)
+    };
+  }
+
+  function copyText(text, msg) {
+    function done(ok) {
+      showResult($('control-result'), ok, ok ? msg : 'Không sao chép tự động được. Cô bôi đen link rồi bấm Ctrl + C nhé.');
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) {}
+      ta.remove();
+      done(ok);
+    }
+  }
+
+  /* ---------------- CONTROL ---------------- */
+
+  function showConfigError(missing, invalid) {
+    var lines = ['Chưa lưu được cấu hình:'];
+    if (missing.indexOf('url') !== -1) lines.push('• Thiếu Project URL — hãy mở Supabase → Settings → API, sao chép dòng Project URL rồi dán vào.');
+    if (invalid.indexOf('url') !== -1) lines.push('• Project URL chưa đúng — địa chỉ phải bắt đầu bằng https:// (ví dụ https://xyzcompany.supabase.co). Hãy sao chép lại, chỉ lấy phần trong ngoặc kép nếu cô sao chép từ đoạn mẫu.');
+    if (missing.indexOf('key') !== -1) lines.push('• Thiếu khóa anon — hãy mở Supabase → Settings → API, sao chép dòng “anon public” rồi dán vào.');
+    if (invalid.indexOf('key') !== -1) lines.push('• Khóa anon chưa đúng — khóa anon thường rất dài. Hãy sao chép lại, chỉ lấy phần trong ngoặc kép, không lấy dấu ngoặc kép hai đầu.');
+    if (!missing.length && !invalid.length) lines.push('• Nội dung dán vào chưa nhận dạng được — hãy dán lại đúng khối JSON hoặc điền từng ô phía dưới.');
+    showResult($('cfg-result'), false, lines.join('\n'));
+  }
+
+  function onSaveConfig() {
+    var pasted = $('cfg-text').value.trim();
+    var url = '', key = '';
+    if (pasted) {
+      var parsed = parseSupabaseConfig(pasted);
+      if (!parsed.config) { showConfigError(parsed.missing, parsed.invalid); return; }
+      url = parsed.config.url; key = parsed.config.key;
+    } else {
+      url = stripOneQuotePair($('cfg-url').value);
+      key = stripOneQuotePair($('cfg-key').value);
+      var v = validateConfig(url, key);
+      if (v.missing.length || v.invalid.length) { showConfigError(v.missing, v.invalid); return; }
+    }
+    cfg = { url: url, key: key };
+    try { localStorage.setItem(LS_CONFIG, JSON.stringify(cfg)); } catch (e) { /* mirror failure never blocks save */ }
+    if (!createClient()) {
+      showResult($('cfg-result'), false, 'Không tải được thư viện Supabase — cô kiểm tra mạng rồi bấm Lưu cấu hình lại nhé.');
+      return;
+    }
+    $('cfg-url').value = url; $('cfg-key').value = key;
+    showResult($('cfg-result'), true, 'Đã lưu cấu hình. Cô kéo xuống để bắt đầu phiên.');
+    $('cfg-status').textContent = 'Đã lưu cấu hình cho project: ' + url;
+    $('session-card').hidden = false;
+    restoreLastSession();
+  }
+
+  function onClearConfig() {
+    try { localStorage.removeItem(LS_CONFIG); } catch (e) {}
+    try { sessionStorage.removeItem(SS_HOST); } catch (e) {}
+    cfg = null; client = null; session = null; pendingAction = null;
+    $('cfg-text').value = ''; $('cfg-url').value = ''; $('cfg-key').value = '';
+    $('cfg-status').textContent = '';
+    $('session-card').hidden = true;
+    showResult($('cfg-result'), true, 'Đã xóa cấu hình đã lưu. Bảng này trở về trạng thái chưa kết nối — cô dán cấu hình mới rồi bấm Lưu cấu hình để dùng tiếp.');
+  }
+
+  function renderSessionPanel() {
+    if (!session) { $('no-session').hidden = false; $('has-session').hidden = true; return; }
+    $('no-session').hidden = true; $('has-session').hidden = false;
+    $('room-code-big').textContent = session.code;
+    $('session-status').textContent = statusText(session.status);
+    $('btn-pause').textContent = session.status === 'paused' ? '▶ Tiếp tục' : '⏸ Tạm dừng';
+    var links = shareLinks();
+    $('link-join').textContent = links.join;
+    $('link-live').textContent = links.live;
+    if (location.protocol === 'file:') {
+      var note = $('file-note');
+      if (!note) {
+        note = document.createElement('p');
+        note.id = 'file-note';
+        note.className = 'warn';
+        $('link-join').parentNode.insertBefore(note, $('link-join'));
+      }
+      note.hidden = false;
+      note.textContent = 'File đang mở trực tiếp trên máy (file://) nên link này chưa gửi được cho điện thoại. Cô đăng file lên Netlify Drop rồi mở lại bằng địa chỉ web đó thì link mới dùng được (xem hướng dẫn Word).';
+    }
+    refreshCount();
+  }
+
+  async function restoreLastSession() {
+    if (!client) return;
+    try {
+      var raw = localStorage.getItem(LS_LAST_SESSION);
+      if (!raw) return;
+      var saved = JSON.parse(raw);
+      if (!saved || !saved.code) return;
+      var res = await client.from('sessions').select('*').eq('code', saved.code).maybeSingle();
+      if (res.error || !res.data) return;
+      session = res.data;
+      renderSessionPanel();
+    } catch (e) {}
+  }
+
+  async function refreshCount() {
+    if (!client || !session) return;
+    var res = await client.from('sessions').select('*').eq('id', session.id).single();
+    if (res.data) session = res.data;
+    $('session-status').textContent = statusText(session.status);
+    $('btn-pause').textContent = session.status === 'paused' ? '▶ Tiếp tục' : '⏸ Tạm dừng';
+    $('photo-count').textContent = String(await countVisiblePhotos());
+  }
+
+  async function countVisiblePhotos() {
+    if (!client || !session) return 0;
+    var q = client.from('photos').select('created_at', { count: 'exact', head: true }).eq('session_id', session.id);
+    if (session.cleared_at) q = q.gt('created_at', session.cleared_at);
+    var res = await q;
+    return res.error ? 0 : (res.count || 0);
+  }
+
+  async function onStart() {
+    if (!client) { showResult($('control-result'), false, 'Cô lưu cấu hình trước đã nhé.'); return; }
+    var host = $('host-code').value.trim();
+    if (!/^\d{4}$/.test(host)) {
+      showResult($('control-result'), false, 'Mã điều khiển phải đúng 4 số. Cô nhập 4 số rồi bấm Bắt đầu lại nhé.');
+      return;
+    }
+    for (var attempt = 0; attempt < 5; attempt++) {
+      var code = makeRoomCode();
+      var res = await client.from('sessions').insert({ code: code, host_code: host, status: 'live' }).select().single();
+      if (!res.error && res.data) {
+        session = res.data;
+        try { localStorage.setItem(LS_LAST_SESSION, JSON.stringify({ id: res.data.id, code: res.data.code })); } catch (e) {}
+        try { sessionStorage.setItem(SS_HOST, res.data.id); } catch (e) {}
+        renderSessionPanel();
+        showResult($('control-result'), true, 'Đã bắt đầu phiên. Mã phòng là ' + res.data.code + '. Cô gửi link tham dự cho cả lớp nhé.');
+        return;
+      }
+      if (!res.error || res.error.code !== '23505') {
+        showResult($('control-result'), false, 'Không bắt đầu được phiên: ' + (res.error ? res.error.message : 'lỗi không rõ') + '. Cô kiểm tra mạng rồi thử lại nhé.');
+        return;
+      }
+    }
+    showResult($('control-result'), false, 'Không tạo được mã phòng sau nhiều lần thử. Cô bấm Bắt đầu lại nhé.');
+  }
+
+  function hostVerified() {
+    try { return !!(session && sessionStorage.getItem(SS_HOST) === session.id); } catch (e) { return false; }
+  }
+
+  async function ensureHostGate(actionFn) {
+    if (!session) return;
+    if (hostVerified()) { await actionFn(); return; }
+    pendingAction = actionFn;
+    $('host-gate').hidden = false;
+    $('host-check-msg').textContent = 'Cô nhập mã điều khiển rồi bấm Mở khóa nhé.';
+  }
+
+  async function onHostOk() {
+    if (!session || !client) return;
+    var typed = $('host-check').value.trim();
+    var res = await client.from('sessions').select('*').eq('id', session.id).single();
+    if (res.error || !res.data) { $('host-check-msg').textContent = 'Không đọc được phiên, cô kiểm tra mạng rồi thử lại nhé.'; return; }
+    session = res.data;
+    if (typed === res.data.host_code) {
+      try { sessionStorage.setItem(SS_HOST, res.data.id); } catch (e) {}
+      $('host-gate').hidden = true;
+      $('host-check-msg').textContent = 'Đã mở khóa.';
+      renderSessionPanel();
+      var fn = pendingAction; pendingAction = null;
+      if (fn) await fn();
+    } else {
+      $('host-check-msg').textContent = 'Mã chưa đúng. Cô nhập lại 4 số mã điều khiển đã đặt lúc bắt đầu nhé.';
+    }
+  }
+
+  async function onPauseToggle() {
+    await ensureHostGate(async function () {
+      var action = session.status === 'paused' ? 'resume' : 'pause';
+      var next = nextStatusAfter(session.status, action);
+      if (!next) return;
+      var res = await client.from('sessions').update({ status: next }).eq('id', session.id).select().single();
+      if (res.error) { showResult($('control-result'), false, 'Không đổi được trạng thái: ' + res.error.message); return; }
+      session = res.data;
+      renderSessionPanel();
+      showResult($('control-result'), true, next === 'paused'
+        ? 'Đã tạm dừng. Ảnh mới gửi tới sẽ chờ, không hiện lên màn chiếu.'
+        : 'Đã tiếp tục. Ảnh đang chờ sẽ hiện lên màn chiếu.');
+    });
+  }
+
+  async function onClearWall() {
+    await ensureHostGate(async function () {
+      var count = await countVisiblePhotos();
+      var ok = window.confirm('Màn hình đang có ' + count + ' ảnh.\n\nXóa màn hình sẽ ẩn hết ' + count + ' ảnh này khỏi màn chiếu. Ảnh vẫn còn trong kho dữ liệu, không bị xóa hẳn.\n\nCô có chắc muốn xóa màn hình không?');
+      if (!ok) return;
+      var res = await client.from('sessions').update({ cleared_at: new Date().toISOString() }).eq('id', session.id).select().single();
+      if (res.error) { showResult($('control-result'), false, 'Không xóa được màn hình: ' + res.error.message); return; }
+      session = res.data;
+      renderSessionPanel();
+      showResult($('control-result'), true, 'Đã xóa màn hình (' + count + ' ảnh đã ẩn). Ảnh vẫn còn trong kho, không bị xóa hẳn.');
+    });
+  }
+
+  async function onEnd() {
+    await ensureHostGate(async function () {
+      var ok = window.confirm('Kết thúc phiên này? Sau khi kết thúc, cả lớp sẽ không gửi ảnh được nữa và màn chiếu sẽ hiện “Phiên đã kết thúc”.');
+      if (!ok) return;
+      var res = await client.from('sessions').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', session.id).select().single();
+      if (res.error) { showResult($('control-result'), false, 'Không kết thúc được phiên: ' + res.error.message); return; }
+      session = res.data;
+      renderSessionPanel();
+      showResult($('control-result'), true, 'Đã kết thúc phiên.');
+    });
+  }
+
+  function initControl() {
+    resolveConfig();
+    if (cfg) {
+      $('cfg-url').value = cfg.url;
+      $('cfg-key').value = cfg.key;
+      $('cfg-status').textContent = 'Đã lưu cấu hình cho project: ' + cfg.url;
+      createClient();
+      $('session-card').hidden = false;
+      restoreLastSession();
+    }
+    $('cfg-save').addEventListener('click', onSaveConfig);
+    $('cfg-clear').addEventListener('click', onClearConfig);
+    $('btn-start').addEventListener('click', onStart);
+    $('btn-pause').addEventListener('click', onPauseToggle);
+    $('btn-clear').addEventListener('click', onClearWall);
+    $('btn-end').addEventListener('click', onEnd);
+    $('btn-host-ok').addEventListener('click', onHostOk);
+    $('btn-refresh-count').addEventListener('click', refreshCount);
+    $('copy-join').addEventListener('click', function () { copyText($('link-join').textContent, 'Đã sao chép link tham dự.'); });
+    $('copy-live').addEventListener('click', function () { copyText($('link-live').textContent, 'Đã sao chép link máy chiếu.'); });
+  }
+
+  /* ---------------- JOIN ---------------- */
+
+  function myPhotosKey() { return SS_MINE + ':' + (joinSession ? joinSession.id : ''); }
+
+  function loadMyPhotos() {
+    myPhotos = [];
+    try {
+      var raw = sessionStorage.getItem(myPhotosKey());
+      if (raw) myPhotos = JSON.parse(raw) || [];
+    } catch (e) {}
+    renderMyPhotos();
+  }
+
+  function addMyPhoto(item) {
+    myPhotos.unshift(item);
+    try { sessionStorage.setItem(myPhotosKey(), JSON.stringify(myPhotos)); } catch (e) {}
+    renderMyPhotos();
+  }
+
+  function renderMyPhotos() {
+    var wrap = $('my-photos-card');
+    if (!myPhotos.length) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    var box = $('my-photos');
+    box.innerHTML = '';
+    myPhotos.forEach(function (p) {
+      var img = document.createElement('img');
+      img.className = 'thumb'; img.src = p.url; img.alt = 'Ảnh bạn đã gửi';
+      box.appendChild(img);
+    });
+  }
+
+  function onFilePicked(file) {
+    joinFile = file || null;
+    if (!file) { $('file-name').textContent = ''; $('file-preview').hidden = true; return; }
+    $('file-name').textContent = 'Đã chọn: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB)';
+    var img = $('file-preview');
+    img.src = URL.createObjectURL(file);
+    img.hidden = false;
+  }
+
+  async function findJoinSession() {
+    var code = $('join-room').value.trim();
+    if (!/^\d{4}$/.test(code)) {
+      $('join-session-msg').textContent = 'Mã phòng phải đúng 4 số. Cô kiểm tra lại mã trên màn chiếu nhé.';
+      joinSession = null; return;
+    }
+    var res = await client.from('sessions').select('*').eq('code', code).maybeSingle();
+    if (res.error || !res.data) {
+      $('join-session-msg').textContent = 'Phiên chưa bắt đầu — kiểm tra lại mã phòng nhé.';
+      joinSession = null; return;
+    }
+    joinSession = res.data;
+    var st = uploadState(res.data.status);
+    if (st === 'blocked') $('join-session-msg').textContent = 'Phiên đã kết thúc — không gửi ảnh được nữa.';
+    else if (st === 'held') $('join-session-msg').textContent = 'Phiên đang tạm dừng — ảnh bạn gửi sẽ hiện lên khi cô tiếp tục.';
+    else $('join-session-msg').textContent = 'Phiên đang mở — bạn gửi ảnh lên nhé.';
+    loadMyPhotos();
+  }
+
+  async function onUpload() {
+    if (!joinSession) { showResult($('upload-result'), false, 'Bạn bấm “Tìm phiên” trước, nhập đúng mã phòng rồi mới gửi ảnh nhé.'); return; }
+    if (uploadState(joinSession.status) === 'blocked') { showResult($('upload-result'), false, 'Phiên đã kết thúc — không gửi ảnh được nữa.'); return; }
+    if (!joinFile) { showResult($('upload-result'), false, 'Bạn chọn một ảnh trước đã nhé.'); return; }
+    if (!joinFile.type || joinFile.type.indexOf('image/') !== 0) { showResult($('upload-result'), false, 'File này không phải ảnh. Bạn chọn lại một file ảnh nhé.'); return; }
+    if (joinFile.size > 10 * 1024 * 1024) { showResult($('upload-result'), false, 'Ảnh lớn quá (trên 10 MB). Bạn chọn ảnh nhỏ hơn nhé.'); return; }
+    var btn = $('btn-upload');
+    btn.disabled = true;
+    try {
+      var path = joinSession.id + '/' + Date.now() + '-' + sanitizeFileName(joinFile.name);
+      var up = await client.storage.from('live-photos').upload(path, joinFile, { upsert: false });
+      if (up.error) throw new Error('Không tải ảnh lên được: ' + up.error.message);
+      var ins = await client.from('photos').insert({
+        session_id: joinSession.id,
+        image_path: path,
+        uploader_name: $('join-name').value.trim(),
+        caption: $('join-caption').value.trim()
+      });
+      if (ins.error) throw new Error('Không ghi nhận được ảnh: ' + ins.error.message);
+      showResult($('upload-result'), true, 'Đã gửi! Ảnh của bạn sẽ hiện lên màn hình chiếu.');
+      var pub = client.storage.from('live-photos').getPublicUrl(path).data.publicUrl;
+      addMyPhoto({ path: path, url: pub });
+      $('file-gallery').value = ''; $('file-camera').value = '';
+      $('file-preview').hidden = true; $('file-name').textContent = '';
+      $('join-caption').value = '';
+      joinFile = null;
+    } catch (e) {
+      showResult($('upload-result'), false, e.message + ' Cô kiểm tra mạng rồi gửi lại nhé.');
+    } finally { btn.disabled = false; }
+  }
+
+  function initJoin() {
+    resolveConfig();
+    if (!cfg || !createClient()) { $('join-noconfig').hidden = false; return; }
+    $('join-main').hidden = false;
+    var room = getQueryParam(location.search, 'room');
+    if (room) $('join-room').value = room;
+    $('btn-find-room').addEventListener('click', findJoinSession);
+    $('file-gallery').addEventListener('change', function (e) { onFilePicked(e.target.files[0]); });
+    $('file-camera').addEventListener('change', function (e) { onFilePicked(e.target.files[0]); });
+    $('btn-upload').addEventListener('click', onUpload);
+    loadMyPhotos();
+    if (room) findJoinSession();
+  }
+
+  /* ---------------- LIVE ---------------- */
+
+  function publicUrl(path) {
+    return client.storage.from('live-photos').getPublicUrl(path).data.publicUrl;
+  }
+
+  function photoFigure(p, animate) {
+    var fig = document.createElement('figure');
+    if (animate) fig.className = 'enter';
+    fig.dataset.id = p.id;
+    var img = document.createElement('img');
+    img.src = publicUrl(p.image_path);
+    img.alt = p.caption || 'Ảnh gửi lên';
+    img.loading = 'lazy';
+    fig.appendChild(img);
+    var label = (p.uploader_name ? p.uploader_name : '') + (p.uploader_name && p.caption ? ' — ' : '') + (p.caption || '');
+    if (label) {
+      var cap = document.createElement('figcaption');
+      cap.textContent = label;
+      fig.appendChild(cap);
+    }
+    return fig;
+  }
+
+  function renderWall() {
+    var wall = $('wall');
+    wall.innerHTML = '';
+    wallPhotos.forEach(function (p) { wall.appendChild(photoFigure(p, false)); });
+    $('live-empty').hidden = wallPhotos.length > 0;
+  }
+
+  function prependPhoto(p) {
+    if (document.querySelector('[data-id="' + p.id + '"]')) return;
+    wallPhotos.unshift(p);
+    $('wall').prepend(photoFigure(p, true));
+    $('live-empty').hidden = true;
+  }
+
+  function updatePausedBadge() {
+    $('live-paused').hidden = !(session && session.status === 'paused');
+    $('live-ended').hidden = !(session && session.status === 'ended');
+  }
+
+  async function refreshWall() {
+    if (!client || !session) return;
+    var s = await client.from('sessions').select('*').eq('id', session.id).single();
+    if (s.data) session = s.data;
+    if (session.status === 'ended') { $('live-ended').hidden = false; $('live-paused').hidden = true; return; }
+    var res = await client.from('photos').select('*').eq('session_id', session.id).order('created_at', { ascending: false }).limit(200);
+    if (res.error) return;
+    wallPhotos = filterWallPhotos(res.data || [], session);
+    renderWall();
+    updatePausedBadge();
+  }
+
+  function renderCornerQR() {
+    var links = shareLinks();
+    var box = $('corner-qr');
+    box.innerHTML = '';
+    try {
+      var qr = qrcode(0, 'M');
+      qr.addData(links.join);
+      qr.make();
+      box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 8 });
+      var svg = box.querySelector('svg');
+      if (svg) { svg.setAttribute('width', '180'); svg.setAttribute('height', '180'); }
+      $('corner-link-note').textContent = location.protocol === 'file:'
+        ? 'Link file:// chỉ chạy trên máy này — đăng file lên web thì mã này mới quét được từ điện thoại.'
+        : '';
+    } catch (e) {
+      box.textContent = 'Không tạo được mã QR.';
+    }
+  }
+
+  function subscribeWall() {
+    if (!client || !session) return;
+    if (channel) { try { client.removeChannel(channel); } catch (e) {} }
+    channel = client.channel('wall-' + session.id)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'photos', filter: 'session_id=eq.' + session.id }, function (payload) {
+        var p = payload.new;
+        if (!p) return;
+        if (shouldHoldInsert(session.status)) return;
+        if (session.cleared_at && new Date(p.created_at).getTime() <= new Date(session.cleared_at).getTime()) return;
+        prependPhoto(p);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sessions', filter: 'id=eq.' + session.id }, function (payload) {
+        var s = payload.new;
+        if (!s) return;
+        var wasPaused = session.status === 'paused';
+        var clearedChanged = s.cleared_at !== session.cleared_at;
+        session = s;
+        if (session.status === 'ended') { $('live-ended').hidden = false; $('live-paused').hidden = true; return; }
+        if (clearedChanged || (wasPaused && session.status === 'live')) { refreshWall(); return; }
+        updatePausedBadge();
+      })
+      .subscribe(function (status) {
+        if (status === 'SUBSCRIBED') refreshWall();
+      });
+  }
+
+  async function openLive(code) {
+    if (!/^\d{4}$/.test(code)) { $('live-setup-msg').textContent = 'Mã phòng phải đúng 4 số.'; return; }
+    var res = await client.from('sessions').select('*').eq('code', code).maybeSingle();
+    if (res.error || !res.data) { $('live-setup-msg').textContent = 'Không tìm thấy phiên này — kiểm tra lại mã phòng nhé.'; return; }
+    session = res.data;
+    $('live-setup').hidden = true;
+    $('live-wall-wrap').hidden = false;
+    $('live-corner').hidden = false;
+    $('corner-code').textContent = session.code;
+    renderCornerQR();
+    await refreshWall();
+    subscribeWall();
+  }
+
+  function initLive() {
+    resolveConfig();
+    if (!cfg || !createClient()) {
+      $('live-setup-msg').textContent = 'Hãy mở bằng link của cô giáo (link này chưa có cấu hình).';
+      return;
+    }
+    var room = getQueryParam(location.search, 'room');
+    if (room) $('live-room').value = room;
+    $('btn-live-open').addEventListener('click', function () { openLive($('live-room').value.trim()); });
+    if (room) openLive(room);
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && session && $('view-live') && !$('view-live').hidden) refreshWall();
+  });
+
+  /* ---------------- BOOT ---------------- */
+
+  (function init() {
+    if (typeof window.supabase === 'undefined') $('global-error').hidden = false;
+    var view = getViewFromSearch(location.search);
+    ['chooser', 'control', 'join', 'live'].forEach(function (v) {
+      $('view-' + v).hidden = (v !== view);
+    });
+    if (view === 'control') initControl();
+    else if (view === 'join') initJoin();
+    else if (view === 'live') initLive();
+  })();
+})();
+</script>
+</body>
+</html>
